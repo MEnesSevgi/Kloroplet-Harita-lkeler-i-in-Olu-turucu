@@ -26,24 +26,11 @@
         #applyColoring { background-color: #007bff; color: white; font-weight: bold; }
         #shareMap { background-color: #6f42c1; color: white; font-weight: bold; margin-top: 5px; }
 
-        /* YENİ BAŞLIK STİLİ */
         .map-title {
-            position: absolute;
-            top: 20px;
-            left: 50%;
-            transform: translateX(-50%);
-            z-index: 1000;
-            background: rgba(255, 255, 255, 0.9);
-            padding: 12px 25px;
-            border-radius: 8px;
-            border: 2px solid rgba(0,0,0,0.1);
-            font-size: 22px;
-            font-weight: bold;
-            color: #333;
-            box-shadow: 0 4px 15px rgba(0,0,0,0.2);
-            white-space: nowrap;
-            pointer-events: none;
-            text-align: center;
+            position: absolute; top: 20px; left: 50%; transform: translateX(-50%); z-index: 1000;
+            background: rgba(255, 255, 255, 0.9); padding: 12px 25px; border-radius: 8px;
+            border: 2px solid rgba(0,0,0,0.1); font-size: 22px; font-weight: bold; color: #333;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.2); white-space: nowrap; pointer-events: none; text-align: center;
         }
 
         .range-item { display: flex; align-items: center; gap: 5px; margin-bottom: 5px; }
@@ -58,6 +45,16 @@
 
         .legend { background: white; padding: 10px; border: 1px solid #ccc; border-radius: 5px; box-shadow: 0 0 15px rgba(0,0,0,0.2); font-size: 12px; line-height: 1.5; }
         .legend i { width: 16px; height: 16px; float: left; margin-right: 8px; opacity: 0.8; }
+
+        /* YENİ: Sol Alt Açıklama Paneli Stili */
+        .info-panel {
+            background: white; padding: 12px; border: 1px solid #ccc; border-radius: 5px;
+            box-shadow: 0 0 15px rgba(0,0,0,0.2); font-size: 13px; line-height: 1.6; min-width: 180px;
+        }
+        .info-panel h4 { margin: 0 0 8px 0; color: #007bff; border-bottom: 1px solid #eee; padding-bottom: 4px; font-size: 14px; }
+        .info-panel ul { list-style: none; padding: 0; margin: 0; }
+        .info-panel li { display: flex; justify-content: space-between; border-bottom: 1px solid #f9f9f9; }
+        .info-panel li b { color: #333; margin-left: 10px; }
     </style>
 </head>
 <body>
@@ -129,7 +126,6 @@
         const downloadExcel = document.getElementById('downloadExcel');
         const fileUpload = document.getElementById('fileUpload');
 
-        // Başlık için DOM elemanı oluştur ve harita kabına ekle
         const titleDiv = document.createElement('div');
         titleDiv.className = 'map-title';
         titleDiv.style.display = 'none';
@@ -171,7 +167,6 @@
             if (selection === 'osmBasemap') {
                 if (!map.hasLayer(osmTileLayer)) map.addLayer(osmTileLayer);
                 if (grayBordersLayer && map.hasLayer(grayBordersLayer)) map.removeLayer(grayBordersLayer);
-                if (!map.hasLayer(polygonsGroup)) map.addLayer(polygonsGroup);
             } else if (selection === 'grayBorders') {
                 if (map.hasLayer(osmTileLayer)) map.removeLayer(osmTileLayer);
                 if (!grayBordersLayer && countriesGeoJSON) {
@@ -179,11 +174,10 @@
                         style: { fillColor: '#f4f4f4', color: '#ddd', weight: 1, fillOpacity: 1 },
                         interactive: false
                     }).addTo(map);
-                    polygonsGroup.bringToFront();
                 }
                 if (grayBordersLayer && !map.hasLayer(grayBordersLayer)) map.addLayer(grayBordersLayer);
-                if (!map.hasLayer(polygonsGroup)) map.addLayer(polygonsGroup);
             }
+            polygonsGroup.bringToFront();
         }
 
         function getColor(v) {
@@ -196,6 +190,34 @@
             }
             return colors[0];
         }
+
+        // --- SOL ALT PANEL KONTROLÜ ---
+        const topFivePanel = L.control({position: 'bottomleft'});
+        topFivePanel.onAdd = function() {
+            this._div = L.DomUtil.create('div', 'info-panel');
+            this.update();
+            return this._div;
+        };
+        topFivePanel.update = function() {
+            const sorted = Object.values(countryData)
+                .filter(d => d.dataValue !== undefined && !isNaN(d.dataValue) && d.dataValue > 0)
+                .sort((a, b) => b.dataValue - a.dataValue)
+                .slice(0, 5);
+            
+            let title = mapTitleInput.value.trim() || "En Yüksek 5 Veri";
+            let html = `<h4>${title}</h4><ul>`;
+            
+            if(sorted.length === 0) {
+                html += "<li>Veri bulunamadı</li>";
+            } else {
+                sorted.forEach((d, i) => {
+                    html += `<li><span>${i+1}. ${d.displayName}</span> <b>${d.dataValue}</b></li>`;
+                });
+            }
+            html += "</ul>";
+            this._div.innerHTML = html;
+        };
+        topFivePanel.addTo(map);
 
         function applyChoroplethColoring() {
             const inputs = document.querySelectorAll('.break-input');
@@ -216,6 +238,7 @@
                 }
             }).addTo(polygonsGroup);
             updateLegend();
+            topFivePanel.update(); // Sol alt paneli güncelle
         }
 
         const legend = L.control({position: 'bottomright'});
