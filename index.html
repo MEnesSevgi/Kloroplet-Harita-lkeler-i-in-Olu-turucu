@@ -3,25 +3,21 @@
 <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Dinamik Kloroplet Haritası - Excel & Başlık & Paylaşım</title>
+    <title>Dinamik Kloroplet Haritası - Ortalı Başlık</title>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="" />
     <script src="https://cdnjs.cloudflare.com/ajax/libs/lz-string/1.4.4/lz-string.min.js"></script>
     <style>
-        /* Ana Düzen */
         html, body { margin: 0; padding: 0; height: 100vh; width: 100vw; font-family: Arial, sans-serif; display: flex; overflow: hidden; background-color: #f4f4f4; }
-        #map { flex-grow: 1; height: 100vh; width: 100%; }
+        #map { flex-grow: 1; height: 100vh; width: 100%; position: relative; }
         
-        /* Sağ Kenar Çubuğu (Sidebar) */
-        #sidebar { width: 350px; background: #ffffff; border-left: 1px solid #ddd; padding: 15px; overflow-y: auto; box-shadow: -2px 0 5px rgba(0,0,0,0.1); flex-shrink: 0; z-index: 1000; }
+        #sidebar { width: 350px; background: #ffffff; border-left: 1px solid #ddd; padding: 15px; overflow-y: auto; box-shadow: -2px 0 5px rgba(0,0,0,0.1); flex-shrink: 0; z-index: 1001; }
         
-        /* Paylaşım modunda sidebar gizleme sınıfı */
         .viewer-mode #sidebar { display: none !important; }
         .viewer-mode #map { width: 100vw; }
 
         h2 { font-size: 18px; margin-top: 0; padding-bottom: 5px; border-bottom: 2px solid #007bff; color: #007bff; }
         h3 { font-size: 16px; margin-top: 15px; margin-bottom: 5px; color: #333; }
 
-        /* Form Elemanları */
         .control-group, .layer-control-group { margin-bottom: 20px; padding: 10px; border: 1px solid #eee; border-radius: 6px; background-color: #f8f9fa; }
         label { display: block; margin-top: 5px; font-weight: bold; font-size: 13px; }
         input[type=color], input[type=text], select, button, .file-input-label { width: 100%; padding: 8px; margin-top: 5px; border-radius: 4px; border: 1px solid #ccc; font-size: 13px; box-sizing: border-box; cursor: pointer; text-align: center; }
@@ -30,36 +26,38 @@
         #applyColoring { background-color: #007bff; color: white; font-weight: bold; }
         #shareMap { background-color: #6f42c1; color: white; font-weight: bold; margin-top: 5px; }
 
+        /* YENİ BAŞLIK STİLİ */
+        .map-title {
+            position: absolute;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 1000;
+            background: rgba(255, 255, 255, 0.9);
+            padding: 12px 25px;
+            border-radius: 8px;
+            border: 2px solid rgba(0,0,0,0.1);
+            font-size: 22px;
+            font-weight: bold;
+            color: #333;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+            white-space: nowrap;
+            pointer-events: none;
+            text-align: center;
+        }
+
         .range-item { display: flex; align-items: center; gap: 5px; margin-bottom: 5px; }
         .range-item input { width: 100%; padding: 4px; font-size: 12px; }
         .range-color-box { width: 20px; height: 20px; border: 1px solid #999; flex-shrink: 0; }
-
         #excelControls { display: flex; gap: 5px; margin-bottom: 10px; }
         #fileUpload { display: none; }
         .file-input-label { background-color: #28a745; color: white; margin-top: 5px; line-height: 1.2; }
-        
         #dataInputContainer { max-height: 25vh; overflow-y: auto; margin-top: 10px; border: 1px solid #eee; padding: 5px; }
         .country-data-item { display: flex; align-items: center; margin-bottom: 5px; border-bottom: 1px dotted #eee; }
         .country-data-item input { padding: 4px; font-size: 12px; height: 26px; }
 
-        /* Harita Başlığı Stili */
-        .map-title {
-            background: rgba(255, 255, 255, 0.9);
-            padding: 10px 15px;
-            border-radius: 8px;
-            border: 2px solid rgba(0,0,0,0.2);
-            font-size: 20px;
-            font-weight: bold;
-            color: #333;
-            box-shadow: 0 0 15px rgba(0,0,0,0.2);
-        }
-
-        /* Lejant */
         .legend { background: white; padding: 10px; border: 1px solid #ccc; border-radius: 5px; box-shadow: 0 0 15px rgba(0,0,0,0.2); font-size: 12px; line-height: 1.5; }
         .legend i { width: 16px; height: 16px; float: left; margin-right: 8px; opacity: 0.8; }
-
-        .layer-control-group label { font-weight: normal; margin-right: 10px; cursor: pointer; }
-        .layer-control-group input[type=radio] { margin-right: 5px; cursor: pointer; }
     </style>
 </head>
 <body>
@@ -68,7 +66,7 @@
     <div id="sidebar">
         <h2>📊 Kloroplet Tasarımcısı</h2>
         <div class="control-group">
-            <label>Harita Başlığı</label>
+            <label>Harita Başlığı (Üst Orta)</label>
             <input type="text" id="mapTitleInput" placeholder="Harita başlığını yazın..." />
 
             <label>Ana Renk & Stil</label>
@@ -131,25 +129,21 @@
         const downloadExcel = document.getElementById('downloadExcel');
         const fileUpload = document.getElementById('fileUpload');
 
-        // Başlık Kontrolü
-        const titleControl = L.control({position: 'topleft'});
-        titleControl.onAdd = function() {
-            this._div = L.DomUtil.create('div', 'map-title');
-            this._div.style.display = 'none'; // Başlangıçta gizli
-            return this._div;
-        };
-        titleControl.addTo(map);
+        // Başlık için DOM elemanı oluştur ve harita kabına ekle
+        const titleDiv = document.createElement('div');
+        titleDiv.className = 'map-title';
+        titleDiv.style.display = 'none';
+        document.getElementById('map').appendChild(titleDiv);
 
         function updateMapTitle() {
             const title = mapTitleInput.value.trim();
             if(title) {
-                titleControl._div.innerHTML = title;
-                titleControl._div.style.display = 'block';
+                titleDiv.innerHTML = title;
+                titleDiv.style.display = 'block';
             } else {
-                titleControl._div.style.display = 'none';
+                titleDiv.style.display = 'none';
             }
         }
-
         mapTitleInput.oninput = updateMapTitle;
 
         function generateColorScale(base, type, count) {
@@ -268,18 +262,12 @@
         };
 
         function shareMapConfig() {
-            const cleanData = {};
-            for (let id in countryData) {
-                if (countryData[id].dataValue !== undefined && !isNaN(countryData[id].dataValue)) {
-                    cleanData[id] = countryData[id];
-                }
-            }
             const config = {
-                mt: mapTitleInput.value, // Başlığı ekle
+                mt: mapTitleInput.value,
                 c: colorPicker.value,
                 t: gradientType.value,
                 b: manualBreaks,
-                d: cleanData
+                d: countryData
             };
             const compressed = LZString.compressToEncodedURIComponent(JSON.stringify(config));
             const url = window.location.origin + window.location.pathname + '?config=' + compressed;
@@ -296,7 +284,7 @@
                 document.body.classList.add('viewer-mode');
                 try {
                     const decoded = JSON.parse(LZString.decompressFromEncodedURIComponent(configData));
-                    mapTitleInput.value = decoded.mt || ""; // Başlığı yükle
+                    mapTitleInput.value = decoded.mt || "";
                     colorPicker.value = decoded.c;
                     gradientType.value = decoded.t;
                     manualBreaks = decoded.b;
