@@ -46,7 +46,6 @@
         .legend { background: white; padding: 10px; border: 1px solid #ccc; border-radius: 5px; box-shadow: 0 0 15px rgba(0,0,0,0.2); font-size: 12px; line-height: 1.5; }
         .legend i { width: 16px; height: 16px; float: left; margin-right: 8px; opacity: 0.8; }
 
-        /* YENİ: Sol Alt Açıklama Paneli Stili */
         .info-panel {
             background: white; padding: 12px; border: 1px solid #ccc; border-radius: 5px;
             box-shadow: 0 0 15px rgba(0,0,0,0.2); font-size: 13px; line-height: 1.6; min-width: 180px;
@@ -143,45 +142,12 @@
         mapTitleInput.oninput = updateMapTitle;
 
         function generateColorScale(base, type, count) {
-            const scale = chroma.scale([chroma(base).brighten(2), base, chroma(base).darken(2)]).colors(count);
+            const scale = chroma.scale([chroma(base).brighten(2.2), base, chroma(base).darken(2.2)]).colors(count);
             return type === 'lowToHigh' ? scale.reverse() : scale;
         }
 
-        function renderRangeInputs() {
-            if (!rangeSettingsContainer) return;
-            rangeSettingsContainer.innerHTML = '';
-            const baseColor = colorPicker.value;
-            const type = gradientType.value;
-            const colors = generateColorScale(baseColor, type, manualBreaks.length + 1);
-
-            manualBreaks.forEach((val, i) => {
-                const div = document.createElement('div');
-                div.className = 'range-item';
-                div.innerHTML = `<div class="range-color-box" style="background:${colors[i]}"></div>
-                                 <input type="number" step="any" value="${val}" class="break-input" min="0">`;
-                rangeSettingsContainer.appendChild(div);
-            });
-        }
-
-        function updateMapLayers(selection) {
-            if (selection === 'osmBasemap') {
-                if (!map.hasLayer(osmTileLayer)) map.addLayer(osmTileLayer);
-                if (grayBordersLayer && map.hasLayer(grayBordersLayer)) map.removeLayer(grayBordersLayer);
-            } else if (selection === 'grayBorders') {
-                if (map.hasLayer(osmTileLayer)) map.removeLayer(osmTileLayer);
-                if (!grayBordersLayer && countriesGeoJSON) {
-                    grayBordersLayer = L.geoJSON(countriesGeoJSON, {
-                        style: { fillColor: '#f4f4f4', color: '#ddd', weight: 1, fillOpacity: 1 },
-                        interactive: false
-                    }).addTo(map);
-                }
-                if (grayBordersLayer && !map.hasLayer(grayBordersLayer)) map.addLayer(grayBordersLayer);
-            }
-            polygonsGroup.bringToFront();
-        }
-
         function getColor(v) {
-            if (v === undefined || isNaN(v) || v === null) return '#f1f1f1';
+            if (v === undefined || isNaN(v) || v === null || v === 0) return '#f1f1f1';
             const baseColor = colorPicker.value;
             const type = gradientType.value;
             const colors = generateColorScale(baseColor, type, manualBreaks.length + 1);
@@ -191,7 +157,6 @@
             return colors[0];
         }
 
-        // --- SOL ALT PANEL KONTROLÜ ---
         const topFivePanel = L.control({position: 'bottomleft'});
         topFivePanel.onAdd = function() {
             this._div = L.DomUtil.create('div', 'info-panel');
@@ -203,10 +168,8 @@
                 .filter(d => d.dataValue !== undefined && !isNaN(d.dataValue) && d.dataValue > 0)
                 .sort((a, b) => b.dataValue - a.dataValue)
                 .slice(0, 5);
-            
             let title = mapTitleInput.value.trim() || "En Yüksek 5 Veri";
             let html = `<h4>${title}</h4><ul>`;
-            
             if(sorted.length === 0) {
                 html += "<li>Veri bulunamadı</li>";
             } else {
@@ -238,7 +201,7 @@
                 }
             }).addTo(polygonsGroup);
             updateLegend();
-            topFivePanel.update(); // Sol alt paneli güncelle
+            topFivePanel.update();
         }
 
         const legend = L.control({position: 'bottomright'});
@@ -250,48 +213,33 @@
         legend.addTo(map);
 
         function updateLegend() {
-            const baseColor = colorPicker.value;
-            const type = gradientType.value;
-            const colors = generateColorScale(baseColor, type, manualBreaks.length + 1);
+            const colors = generateColorScale(colorPicker.value, gradientType.value, manualBreaks.length + 1);
             let labels = ['<i style="background:#f1f1f1"></i> 0'];
             for (let i = 0; i < manualBreaks.length; i++) {
-                let from = manualBreaks[i-1] ? manualBreaks[i-1] + 1 : 1;
-                let to = manualBreaks[i];
-                labels.push('<i style="background:' + colors[i] + '"></i> ' + from + (to ? ' &ndash; ' + to : '+'));
+                let from = manualBreaks[i];
+                let to = manualBreaks[i+1];
+                labels.push('<i style="background:' + colors[i+1] + '"></i> ' + from + (to ? ' &ndash; ' + to : '+'));
             }
-            labels.push('<i style="background:' + colors[manualBreaks.length] + '"></i> ' + (manualBreaks[manualBreaks.length-1] + 1) + '+');
             legend._div.innerHTML = labels.join('<br>');
+        }
+
+        function renderRangeInputs() {
+            if (!rangeSettingsContainer) return;
+            rangeSettingsContainer.innerHTML = '';
+            const colors = generateColorScale(colorPicker.value, gradientType.value, manualBreaks.length + 1);
+            manualBreaks.forEach((val, i) => {
+                const div = document.createElement('div');
+                div.className = 'range-item';
+                div.innerHTML = `<div class="range-color-box" style="background:${colors[i+1]}"></div>
+                                 <input type="number" step="any" value="${val}" class="break-input" min="0">`;
+                rangeSettingsContainer.appendChild(div);
+            });
         }
 
         function getCountryName(f) { return (f.properties.ADMIN || f.properties.NAME || f.properties.name || "").trim(); }
 
-        function populateDataInputs() {
-            dataInputContainer.innerHTML = '';
-            geojsonFeatureOrder.forEach(id => {
-                const d = countryData[id] || { dataValue: '', displayName: id };
-                const div = document.createElement('div');
-                div.className = 'country-data-item';
-                div.innerHTML = `<input type="text" value="${d.displayName}" oninput="updateData('${id}', 'n', this.value)" style="flex:2">
-                                 <input type="number" value="${d.dataValue}" oninput="updateData('${id}', 'v', this.value)" style="flex:1">`;
-                dataInputContainer.appendChild(div);
-            });
-            renderRangeInputs();
-        }
-
-        window.updateData = (id, type, val) => {
-            if(!countryData[id]) countryData[id] = {dataValue: undefined, displayName: id};
-            if(type === 'v') countryData[id].dataValue = parseFloat(val);
-            else countryData[id].displayName = val;
-        };
-
         function shareMapConfig() {
-            const config = {
-                mt: mapTitleInput.value,
-                c: colorPicker.value,
-                t: gradientType.value,
-                b: manualBreaks,
-                d: countryData
-            };
+            const config = { mt: mapTitleInput.value, c: colorPicker.value, t: gradientType.value, b: manualBreaks, d: countryData };
             const compressed = LZString.compressToEncodedURIComponent(JSON.stringify(config));
             const url = window.location.origin + window.location.pathname + '?config=' + compressed;
             navigator.clipboard.writeText(url).then(() => {
@@ -300,26 +248,73 @@
             });
         }
 
-        function loadConfigFromURL() {
-            const params = new URLSearchParams(window.location.search);
-            const configData = params.get('config');
-            if (configData) {
-                document.body.classList.add('viewer-mode');
-                try {
-                    const decoded = JSON.parse(LZString.decompressFromEncodedURIComponent(configData));
-                    mapTitleInput.value = decoded.mt || "";
-                    colorPicker.value = decoded.c;
-                    gradientType.value = decoded.t;
-                    manualBreaks = decoded.b;
-                    countryData = decoded.d;
-                    updateMapTitle();
-                    setTimeout(() => {
-                        applyChoroplethColoring();
-                        map.invalidateSize();
-                    }, 500);
-                } catch (e) { console.error("Veri bozuk."); }
+        fetch('https://raw.githubusercontent.com/datasets/geo-countries/master/data/countries.geojson')
+            .then(res => res.json())
+            .then(data => {
+                countriesGeoJSON = data;
+                geojsonFeatureOrder = data.features.map(f => getCountryName(f));
+                
+                // Önce URL'den yapılandırmayı yükle
+                const params = new URLSearchParams(window.location.search);
+                const configData = params.get('config');
+                if (configData) {
+                    document.body.classList.add('viewer-mode');
+                    try {
+                        const decoded = JSON.parse(LZString.decompressFromEncodedURIComponent(configData));
+                        mapTitleInput.value = decoded.mt || "";
+                        colorPicker.value = decoded.c;
+                        gradientType.value = decoded.t;
+                        manualBreaks = decoded.b;
+                        countryData = decoded.d;
+                    } catch (e) { console.error("Veri bozuk."); }
+                }
+
+                // Girdileri oluştur ve haritayı renklendir
+                dataInputContainer.innerHTML = '';
+                geojsonFeatureOrder.forEach(id => {
+                    const d = countryData[id] || { dataValue: '', displayName: id };
+                    const div = document.createElement('div');
+                    div.className = 'country-data-item';
+                    div.innerHTML = `<input type="text" value="${d.displayName}" oninput="updateData('${id}', 'n', this.value)" style="flex:2">
+                                     <input type="number" value="${d.dataValue}" oninput="updateData('${id}', 'v', this.value)" style="flex:1">`;
+                    dataInputContainer.appendChild(div);
+                });
+
+                renderRangeInputs();
+                applyChoroplethColoring();
+                map.invalidateSize();
+            });
+
+        window.updateData = (id, type, val) => {
+            if(!countryData[id]) countryData[id] = {dataValue: 0, displayName: id};
+            if(type === 'v') countryData[id].dataValue = parseFloat(val);
+            else countryData[id].displayName = val;
+        };
+
+        applyColoring.onclick = applyChoroplethColoring;
+        shareMap.onclick = shareMapConfig;
+        colorPicker.onchange = renderRangeInputs;
+        gradientType.onchange = renderRangeInputs;
+
+        function updateMapLayers(selection) {
+            if (selection === 'osmBasemap') {
+                if (!map.hasLayer(osmTileLayer)) map.addLayer(osmTileLayer);
+                if (grayBordersLayer && map.hasLayer(grayBordersLayer)) map.removeLayer(grayBordersLayer);
+            } else if (selection === 'grayBorders') {
+                if (map.hasLayer(osmTileLayer)) map.removeLayer(osmTileLayer);
+                if (!grayBordersLayer && countriesGeoJSON) {
+                    grayBordersLayer = L.geoJSON(countriesGeoJSON, {
+                        style: { fillColor: '#f4f4f4', color: '#ddd', weight: 1, fillOpacity: 1 },
+                        interactive: false
+                    }).addTo(map);
+                }
+                if (grayBordersLayer && !map.hasLayer(grayBordersLayer)) map.addLayer(grayBordersLayer);
             }
+            polygonsGroup.bringToFront();
         }
+
+        document.getElementById('osmBasemap').onchange = e => { if (e.target.checked) updateMapLayers('osmBasemap'); };
+        document.getElementById('grayBorders').onchange = e => { if (e.target.checked) updateMapLayers('grayBorders'); };
 
         downloadExcel.onclick = () => {
             const data = geojsonFeatureOrder.map(id => ({'ÜLKE_ADI_HARİTA': id, 'MATEMATİKSEL_DEĞER': countryData[id]?.dataValue || 0}));
@@ -338,30 +333,11 @@
                     const id = row['ÜLKE_ADI_HARİTA'];
                     if(id) countryData[id] = { dataValue: parseFloat(row['MATEMATİKSEL_DEĞER']), displayName: id };
                 });
-                populateDataInputs();
+                renderRangeInputs();
                 applyChoroplethColoring();
             };
             reader.readAsArrayBuffer(e.target.files[0]);
         };
-
-        applyColoring.onclick = applyChoroplethColoring;
-        shareMap.onclick = shareMapConfig;
-        colorPicker.onchange = renderRangeInputs;
-        gradientType.onchange = renderRangeInputs;
-
-        document.getElementById('osmBasemap').onchange = e => { if (e.target.checked) updateMapLayers('osmBasemap'); };
-        document.getElementById('grayBorders').onchange = e => { if (e.target.checked) updateMapLayers('grayBorders'); };
-
-        fetch('https://raw.githubusercontent.com/datasets/geo-countries/master/data/countries.geojson')
-            .then(res => res.json())
-            .then(data => {
-                countriesGeoJSON = data;
-                geojsonFeatureOrder = data.features.map(f => getCountryName(f));
-                populateDataInputs();
-                loadConfigFromURL();
-                updateMapLayers('osmBasemap');
-                renderRangeInputs();
-            });
     </script>
 </body>
 </html>
