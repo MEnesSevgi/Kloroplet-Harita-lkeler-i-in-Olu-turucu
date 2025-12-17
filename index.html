@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Dinamik Kloroplet Haritası - Excel & Sıkıştırılmış Paylaşım & Katman Kontrolü</title>
+    <title>Dinamik Kloroplet Haritası - Excel & Başlık & Paylaşım</title>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="" />
     <script src="https://cdnjs.cloudflare.com/ajax/libs/lz-string/1.4.4/lz-string.min.js"></script>
     <style>
@@ -24,7 +24,8 @@
         /* Form Elemanları */
         .control-group, .layer-control-group { margin-bottom: 20px; padding: 10px; border: 1px solid #eee; border-radius: 6px; background-color: #f8f9fa; }
         label { display: block; margin-top: 5px; font-weight: bold; font-size: 13px; }
-        input[type=color], select, button, .file-input-label { width: 100%; padding: 8px; margin-top: 5px; border-radius: 4px; border: 1px solid #ccc; font-size: 13px; box-sizing: border-box; cursor: pointer; text-align: center; }
+        input[type=color], input[type=text], select, button, .file-input-label { width: 100%; padding: 8px; margin-top: 5px; border-radius: 4px; border: 1px solid #ccc; font-size: 13px; box-sizing: border-box; cursor: pointer; text-align: center; }
+        input[type=text] { text-align: left; cursor: text; }
         
         #applyColoring { background-color: #007bff; color: white; font-weight: bold; }
         #shareMap { background-color: #6f42c1; color: white; font-weight: bold; margin-top: 5px; }
@@ -41,11 +42,22 @@
         .country-data-item { display: flex; align-items: center; margin-bottom: 5px; border-bottom: 1px dotted #eee; }
         .country-data-item input { padding: 4px; font-size: 12px; height: 26px; }
 
+        /* Harita Başlığı Stili */
+        .map-title {
+            background: rgba(255, 255, 255, 0.9);
+            padding: 10px 15px;
+            border-radius: 8px;
+            border: 2px solid rgba(0,0,0,0.2);
+            font-size: 20px;
+            font-weight: bold;
+            color: #333;
+            box-shadow: 0 0 15px rgba(0,0,0,0.2);
+        }
+
         /* Lejant */
         .legend { background: white; padding: 10px; border: 1px solid #ccc; border-radius: 5px; box-shadow: 0 0 15px rgba(0,0,0,0.2); font-size: 12px; line-height: 1.5; }
         .legend i { width: 16px; height: 16px; float: left; margin-right: 8px; opacity: 0.8; }
 
-        /* Layer Control Group Styling */
         .layer-control-group label { font-weight: normal; margin-right: 10px; cursor: pointer; }
         .layer-control-group input[type=radio] { margin-right: 5px; cursor: pointer; }
     </style>
@@ -56,6 +68,9 @@
     <div id="sidebar">
         <h2>📊 Kloroplet Tasarımcısı</h2>
         <div class="control-group">
+            <label>Harita Başlığı</label>
+            <input type="text" id="mapTitleInput" placeholder="Harita başlığını yazın..." />
+
             <label>Ana Renk & Stil</label>
             <input type="color" id="colorPicker" value="#007bff" />
             <select id="gradientType">
@@ -106,6 +121,7 @@
         let countryData = {};
         let manualBreaks = [0, 100, 500, 1000, 5000];
 
+        const mapTitleInput = document.getElementById('mapTitleInput');
         const colorPicker = document.getElementById('colorPicker');
         const gradientType = document.getElementById('gradientType');
         const rangeSettingsContainer = document.getElementById('rangeSettingsContainer');
@@ -115,13 +131,32 @@
         const downloadExcel = document.getElementById('downloadExcel');
         const fileUpload = document.getElementById('fileUpload');
 
-        // Renk skalası üretimi
+        // Başlık Kontrolü
+        const titleControl = L.control({position: 'topleft'});
+        titleControl.onAdd = function() {
+            this._div = L.DomUtil.create('div', 'map-title');
+            this._div.style.display = 'none'; // Başlangıçta gizli
+            return this._div;
+        };
+        titleControl.addTo(map);
+
+        function updateMapTitle() {
+            const title = mapTitleInput.value.trim();
+            if(title) {
+                titleControl._div.innerHTML = title;
+                titleControl._div.style.display = 'block';
+            } else {
+                titleControl._div.style.display = 'none';
+            }
+        }
+
+        mapTitleInput.oninput = updateMapTitle;
+
         function generateColorScale(base, type, count) {
             const scale = chroma.scale([chroma(base).brighten(2), base, chroma(base).darken(2)]).colors(count);
             return type === 'lowToHigh' ? scale.reverse() : scale;
         }
 
-        // Range inputlarını oluştur
         function renderRangeInputs() {
             if (!rangeSettingsContainer) return;
             rangeSettingsContainer.innerHTML = '';
@@ -138,7 +173,6 @@
             });
         }
 
-        // Harita katmanlarını yönet
         function updateMapLayers(selection) {
             if (selection === 'osmBasemap') {
                 if (!map.hasLayer(osmTileLayer)) map.addLayer(osmTileLayer);
@@ -146,27 +180,18 @@
                 if (!map.hasLayer(polygonsGroup)) map.addLayer(polygonsGroup);
             } else if (selection === 'grayBorders') {
                 if (map.hasLayer(osmTileLayer)) map.removeLayer(osmTileLayer);
-
                 if (!grayBordersLayer && countriesGeoJSON) {
                     grayBordersLayer = L.geoJSON(countriesGeoJSON, {
-                        style: {
-                            fillColor: '#f4f4f4',
-                            color: '#ddd',
-                            weight: 1,
-                            fillOpacity: 1,
-                        },
+                        style: { fillColor: '#f4f4f4', color: '#ddd', weight: 1, fillOpacity: 1 },
                         interactive: false
                     }).addTo(map);
                     polygonsGroup.bringToFront();
                 }
-                if (grayBordersLayer && !map.hasLayer(grayBordersLayer)) {
-                    map.addLayer(grayBordersLayer);
-                }
+                if (grayBordersLayer && !map.hasLayer(grayBordersLayer)) map.addLayer(grayBordersLayer);
                 if (!map.hasLayer(polygonsGroup)) map.addLayer(polygonsGroup);
             }
         }
 
-        // Renk alma fonksiyonu
         function getColor(v) {
             if (v === undefined || isNaN(v) || v === null) return '#f1f1f1';
             const baseColor = colorPicker.value;
@@ -178,14 +203,12 @@
             return colors[0];
         }
 
-        // Haritayı renklendir
         function applyChoroplethColoring() {
-            // Range değerlerini al
             const inputs = document.querySelectorAll('.break-input');
             if(inputs.length > 0) {
                 manualBreaks = Array.from(inputs).map(inp => parseFloat(inp.value)).filter(v => !isNaN(v)).sort((a,b) => a-b);
             }
-
+            updateMapTitle();
             polygonsGroup.clearLayers();
             L.geoJSON(countriesGeoJSON, {
                 style: (f) => {
@@ -201,7 +224,6 @@
             updateLegend();
         }
 
-        // Lejant kontrolü
         const legend = L.control({position: 'bottomright'});
         legend.onAdd = function () { 
             const div = L.DomUtil.create('div', 'legend'); 
@@ -224,10 +246,8 @@
             legend._div.innerHTML = labels.join('<br>');
         }
 
-        // Ülke adı alma fonksiyonu
         function getCountryName(f) { return (f.properties.ADMIN || f.properties.NAME || f.properties.name || "").trim(); }
 
-        // Veri giriş alanlarını oluştur
         function populateDataInputs() {
             dataInputContainer.innerHTML = '';
             geojsonFeatureOrder.forEach(id => {
@@ -247,62 +267,49 @@
             else countryData[id].displayName = val;
         };
 
-        // Paylaşım linki oluşturma
         function shareMapConfig() {
-            // Sadece veri olan ülkeleri filtrele
             const cleanData = {};
             for (let id in countryData) {
                 if (countryData[id].dataValue !== undefined && !isNaN(countryData[id].dataValue)) {
                     cleanData[id] = countryData[id];
                 }
             }
-
             const config = {
+                mt: mapTitleInput.value, // Başlığı ekle
                 c: colorPicker.value,
                 t: gradientType.value,
                 b: manualBreaks,
                 d: cleanData
             };
-
-            const jsonStr = JSON.stringify(config);
-            const compressed = LZString.compressToEncodedURIComponent(jsonStr);
-            
+            const compressed = LZString.compressToEncodedURIComponent(JSON.stringify(config));
             const url = window.location.origin + window.location.pathname + '?config=' + compressed;
-            
             navigator.clipboard.writeText(url).then(() => {
-                alert("Link kopyalandı! Bu link tıklandığında sağ panel otomatik gizlenecektir.");
+                alert("Link kopyalandı!");
                 window.history.pushState({}, '', url);
             });
         }
 
-        // URL'den konfigürasyon yükleme
         function loadConfigFromURL() {
             const params = new URLSearchParams(window.location.search);
             const configData = params.get('config');
             if (configData) {
                 document.body.classList.add('viewer-mode');
-                
                 try {
-                    const decompressed = LZString.decompressFromEncodedURIComponent(configData);
-                    const decoded = JSON.parse(decompressed);
-                    
+                    const decoded = JSON.parse(LZString.decompressFromEncodedURIComponent(configData));
+                    mapTitleInput.value = decoded.mt || ""; // Başlığı yükle
                     colorPicker.value = decoded.c;
                     gradientType.value = decoded.t;
                     manualBreaks = decoded.b;
                     countryData = decoded.d;
-
+                    updateMapTitle();
                     setTimeout(() => {
                         applyChoroplethColoring();
                         map.invalidateSize();
                     }, 500);
-                } catch (e) { 
-                    console.error("Link verisi bozuk.");
-                    document.body.classList.remove('viewer-mode');
-                }
+                } catch (e) { console.error("Veri bozuk."); }
             }
         }
 
-        // Excel şablon indir
         downloadExcel.onclick = () => {
             const data = geojsonFeatureOrder.map(id => ({'ÜLKE_ADI_HARİTA': id, 'MATEMATİKSEL_DEĞER': countryData[id]?.dataValue || 0}));
             const ws = XLSX.utils.json_to_sheet(data);
@@ -311,7 +318,6 @@
             XLSX.writeFile(wb, "Harita_Veri.xlsx");
         };
 
-        // Excel yükle
         fileUpload.onchange = (e) => {
             const reader = new FileReader();
             reader.onload = (ev) => {
@@ -327,20 +333,14 @@
             reader.readAsArrayBuffer(e.target.files[0]);
         };
 
-        // Eventler
         applyColoring.onclick = applyChoroplethColoring;
         shareMap.onclick = shareMapConfig;
         colorPicker.onchange = renderRangeInputs;
         gradientType.onchange = renderRangeInputs;
 
-        document.getElementById('osmBasemap').addEventListener('change', e => {
-            if (e.target.checked) updateMapLayers('osmBasemap');
-        });
-        document.getElementById('grayBorders').addEventListener('change', e => {
-            if (e.target.checked) updateMapLayers('grayBorders');
-        });
+        document.getElementById('osmBasemap').onchange = e => { if (e.target.checked) updateMapLayers('osmBasemap'); };
+        document.getElementById('grayBorders').onchange = e => { if (e.target.checked) updateMapLayers('grayBorders'); };
 
-        // GeoJSON yükle
         fetch('https://raw.githubusercontent.com/datasets/geo-countries/master/data/countries.geojson')
             .then(res => res.json())
             .then(data => {
@@ -351,7 +351,6 @@
                 updateMapLayers('osmBasemap');
                 renderRangeInputs();
             });
-
     </script>
 </body>
 </html>
