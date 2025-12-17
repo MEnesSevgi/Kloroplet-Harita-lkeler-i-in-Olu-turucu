@@ -3,15 +3,21 @@
 <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Dinamik Kloroplet Haritası - Excel & Paylaşım</title>
+    <title>Dinamik Kloroplet Haritası - Excel & Sıkıştırılmış Paylaşım</title>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="" />
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/lz-string/1.4.4/lz-string.min.js"></script>
     <style>
         /* Ana Düzen */
         html, body { margin: 0; padding: 0; height: 100vh; width: 100vw; font-family: Arial, sans-serif; display: flex; overflow: hidden; background-color: #f4f4f4; }
-        #map { flex-grow: 1; height: 100vh; }
+        #map { flex-grow: 1; height: 100vh; width: 100%; }
         
         /* Sağ Kenar Çubuğu (Sidebar) */
-        #sidebar { width: 350px; background: #ffffff; border-left: 1px solid #ddd; padding: 15px; overflow-y: auto; box-shadow: -2px 0 5px rgba(0,0,0,0.1); flex-shrink: 0; }
+        #sidebar { width: 350px; background: #ffffff; border-left: 1px solid #ddd; padding: 15px; overflow-y: auto; box-shadow: -2px 0 5px rgba(0,0,0,0.1); flex-shrink: 0; z-index: 1000; }
+        
+        /* Paylaşım modunda sidebar gizleme sınıfı */
+        .viewer-mode #sidebar { display: none !important; }
+        .viewer-mode #map { width: 100vw; }
+
         h2 { font-size: 18px; margin-top: 0; padding-bottom: 5px; border-bottom: 2px solid #007bff; color: #007bff; }
         h3 { font-size: 16px; margin-top: 15px; margin-bottom: 5px; color: #333; }
 
@@ -23,12 +29,10 @@
         #applyColoring { background-color: #007bff; color: white; font-weight: bold; }
         #shareMap { background-color: #6f42c1; color: white; font-weight: bold; margin-top: 5px; }
 
-        /* Aralık Editörü */
         .range-item { display: flex; align-items: center; gap: 5px; margin-bottom: 5px; }
         .range-item input { width: 100%; padding: 4px; font-size: 12px; }
         .range-color-box { width: 20px; height: 20px; border: 1px solid #999; flex-shrink: 0; }
 
-        /* Excel ve Liste Alanı */
         #excelControls { display: flex; gap: 5px; margin-bottom: 10px; }
         #fileUpload { display: none; }
         .file-input-label { background-color: #28a745; color: white; margin-top: 5px; line-height: 1.2; }
@@ -40,7 +44,6 @@
         /* Lejant */
         .legend { background: white; padding: 10px; border: 1px solid #ccc; border-radius: 5px; box-shadow: 0 0 15px rgba(0,0,0,0.2); font-size: 12px; line-height: 1.5; }
         .legend i { width: 16px; height: 16px; float: left; margin-right: 8px; opacity: 0.8; }
-        .leaflet-control-download { padding: 5px 10px; font-size: 12px; background-color: #ffc107; border: none; font-weight: bold; cursor: pointer; }
     </style>
 </head>
 <body>
@@ -48,7 +51,6 @@
 
     <div id="sidebar">
         <h2>📊 Kloroplet Tasarımcısı</h2>
-
         <div class="control-group">
             <label>Ana Renk & Stil</label>
             <input type="color" id="colorPicker" value="#007bff" />
@@ -61,7 +63,7 @@
             <div id="rangeSettingsContainer"></div>
             
             <button id="applyColoring">✅ Haritayı Renklendir</button>
-            <button id="shareMap">🔗 Bağlantıyı Paylaş (URL)</button>
+            <button id="shareMap">🔗 Sıkıştırılmış Linki Kopyala</button>
         </div>
 
         <h3>Veri Yönetimi</h3>
@@ -96,11 +98,16 @@
         let countriesGeoJSON = null;
         let geojsonFeatureOrder = [];
         let countryData = {};
-        let manualBreaks = [0, 100, 500, 1000, 5000]; // Varsayılan sınırlar
+        let manualBreaks = [0, 100, 500, 1000, 5000];
 
-        // --- Aralık Editörü UI Oluşturma ---
+        function generateColorScale(base, type, count) {
+            const scale = chroma.scale([chroma(base).brighten(2), base, chroma(base).darken(2)]).colors(count);
+            return type === 'lowToHigh' ? scale.reverse() : scale;
+        }
+
         function renderRangeInputs() {
             const container = document.getElementById('rangeSettingsContainer');
+            if (!container) return;
             container.innerHTML = '';
             const baseColor = document.getElementById('colorPicker').value;
             const type = document.getElementById('gradientType').value;
@@ -109,37 +116,37 @@
             manualBreaks.forEach((val, i) => {
                 const div = document.createElement('div');
                 div.className = 'range-item';
-                div.innerHTML = `
-                    <div class="range-color-box" style="background:${colors[i]}"></div>
-                    <input type="number" step="any" value="${val}" class="break-input" data-index="${i}">
-                `;
+                div.innerHTML = `<div class="range-color-box" style="background:${colors[i]}"></div>
+                                 <input type="number" step="any" value="${val}" class="break-input">`;
                 container.appendChild(div);
             });
-            // Son renk (max üstü)
-            const lastDiv = document.createElement('div');
-            lastDiv.className = 'range-item';
-            lastDiv.innerHTML = `<div class="range-color-box" style="background:${colors[manualBreaks.length]}"></div><span style="font-size:10px">Üst Limit</span>`;
-            container.appendChild(lastDiv);
         }
 
-        function generateColorScale(base, type, count) {
-            const scale = chroma.scale([chroma(base).brighten(2), base, chroma(base).darken(2)]).colors(count);
-            return type === 'lowToHigh' ? scale.reverse() : scale;
-        }
-
-        // --- Paylaşma Fonksiyonu (URL Parametreleri) ---
+        // --- GELİŞMİŞ PAYLAŞMA (SIKIŞTIRMA VE GİZLEME) ---
         function shareMapConfig() {
+            // Sadece verisi olan ülkeleri alarak paketi daha da küçültüyoruz
+            const cleanData = {};
+            for (let id in countryData) {
+                if (countryData[id].dataValue !== undefined && !isNaN(countryData[id].dataValue)) {
+                    cleanData[id] = countryData[id];
+                }
+            }
+
             const config = {
                 c: document.getElementById('colorPicker').value,
                 t: document.getElementById('gradientType').value,
                 b: manualBreaks,
-                d: countryData
+                d: cleanData
             };
-            const encoded = btoa(unescape(encodeURIComponent(JSON.stringify(config))));
-            const url = window.location.origin + window.location.pathname + '?config=' + encoded;
+
+            // LZ-String ile veriyi sıkıştır
+            const jsonStr = JSON.stringify(config);
+            const compressed = LZString.compressToEncodedURIComponent(jsonStr);
+            
+            const url = window.location.origin + window.location.pathname + '?config=' + compressed;
             
             navigator.clipboard.writeText(url).then(() => {
-                alert("Harita ayarları ve veriler URL'ye kodlandı ve kopyalandı! Bu linki GitHub sayfanızda paylaşabilirsiniz.");
+                alert("Link kopyalandı! Bu link tıklandığında sağ panel otomatik gizlenecektir.");
                 window.history.pushState({}, '', url);
             });
         }
@@ -148,27 +155,35 @@
             const params = new URLSearchParams(window.location.search);
             const configData = params.get('config');
             if (configData) {
+                // Viewer mode aktif et: Sidebar gizle, haritayı yay
+                document.body.classList.add('viewer-mode');
+                
                 try {
-                    const decoded = JSON.parse(decodeURIComponent(escape(atob(configData))));
+                    const decompressed = LZString.decompressFromEncodedURIComponent(configData);
+                    const decoded = JSON.parse(decompressed);
+                    
                     document.getElementById('colorPicker').value = decoded.c;
                     document.getElementById('gradientType').value = decoded.t;
                     manualBreaks = decoded.b;
                     countryData = decoded.d;
+
+                    // Haritayı hemen çiz
                     setTimeout(() => {
-                        populateDataInputs();
                         applyChoroplethColoring();
-                    }, 1000);
-                } catch (e) { console.error("URL verisi okunamadı."); }
+                        map.invalidateSize(); // Harita boyutunu güncelle
+                    }, 500);
+                } catch (e) { 
+                    console.error("Link verisi bozuk.");
+                    document.body.classList.remove('viewer-mode');
+                }
             }
         }
 
-        // --- Kloroplet Mantığı ---
         function getColor(v) {
             if (v === undefined || isNaN(v) || v === null) return '#ccc';
             const baseColor = document.getElementById('colorPicker').value;
             const type = document.getElementById('gradientType').value;
             const colors = generateColorScale(baseColor, type, manualBreaks.length + 1);
-
             for (let i = manualBreaks.length - 1; i >= 0; i--) {
                 if (v >= manualBreaks[i]) return colors[i + 1];
             }
@@ -176,9 +191,10 @@
         }
 
         function applyChoroplethColoring() {
-            // Sınırları güncelle
             const inputs = document.querySelectorAll('.break-input');
-            manualBreaks = Array.from(inputs).map(inp => parseFloat(inp.value)).sort((a,b) => a-b);
+            if(inputs.length > 0) {
+                manualBreaks = Array.from(inputs).map(inp => parseFloat(inp.value)).sort((a,b) => a-b);
+            }
             
             polygonsGroup.clearLayers();
             L.geoJSON(countriesGeoJSON, {
@@ -195,28 +211,22 @@
             updateLegend();
         }
 
-        // --- Lejant ---
         const legend = L.control({position: 'bottomright'});
-        legend.onAdd = function() {
-            this._div = L.DomUtil.create('div', 'legend');
-            return this._div;
-        };
+        legend.onAdd = function() { this._div = L.DomUtil.create('div', 'legend'); return this._div; };
         function updateLegend() {
             const baseColor = document.getElementById('colorPicker').value;
             const type = document.getElementById('gradientType').value;
             const colors = generateColorScale(baseColor, type, manualBreaks.length + 1);
-            
-            let html = '<b>Lejant</b><br>';
-            html += `<i></i> < ${manualBreaks[0]} <div style="background:${colors[0]}; width:16px; height:16px; display:inline-block; margin-right:5px;"></div><br>`;
+            let html = '<b>Değer Aralığı</b><br>';
+            html += `<i style="background:${colors[0]}; width:15px; height:15px; display:inline-block"></i> < ${manualBreaks[0]}<br>`;
             for(let i=0; i<manualBreaks.length; i++){
                 let next = manualBreaks[i+1] ? '&ndash;'+manualBreaks[i+1] : '+';
-                html += `<div style="background:${colors[i+1]}; width:16px; height:16px; display:inline-block; margin-right:5px;"></div> ${manualBreaks[i]}${next}<br>`;
+                html += `<i style="background:${colors[i+1]}; width:15px; height:15px; display:inline-block"></i> ${manualBreaks[i]}${next}<br>`;
             }
             legend._div.innerHTML = html;
         }
         legend.addTo(map);
 
-        // --- Yardımcılar ---
         function getCountryName(f) { return (f.properties.ADMIN || f.properties.NAME || f.properties.name || "").trim(); }
 
         function populateDataInputs() {
@@ -237,14 +247,11 @@
             if(!countryData[id]) countryData[id] = {dataValue: undefined, displayName: id};
             if(type === 'v') countryData[id].dataValue = parseFloat(val);
             else countryData[id].displayName = val;
-            document.getElementById('applyColoring').disabled = false;
         };
 
-        // --- Event Listeners ---
         document.getElementById('applyColoring').onclick = applyChoroplethColoring;
         document.getElementById('shareMap').onclick = shareMapConfig;
         document.getElementById('colorPicker').onchange = renderRangeInputs;
-        document.getElementById('gradientType').onchange = renderRangeInputs;
 
         fetch('https://raw.githubusercontent.com/datasets/geo-countries/master/data/countries.geojson')
             .then(res => res.json())
@@ -255,11 +262,11 @@
                 loadConfigFromURL();
             });
 
-        // Excel işlemleri (Kısa versiyon)
         document.getElementById('downloadExcel').onclick = () => {
-            const ws = XLSX.utils.json_to_sheet(geojsonFeatureOrder.map(id => ({'ÜLKE_ADI_HARİTA': id, 'MATEMATİKSEL_DEĞER': 0})));
+            const data = geojsonFeatureOrder.map(id => ({'ÜLKE_ADI_HARİTA': id, 'MATEMATİKSEL_DEĞER': countryData[id]?.dataValue || 0}));
+            const ws = XLSX.utils.json_to_sheet(data);
             const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, "Veri");
-            XLSX.writeFile(wb, "Harita_Sablon.xlsx");
+            XLSX.writeFile(wb, "Harita_Veri.xlsx");
         };
 
         document.getElementById('fileUpload').onchange = (e) => {
@@ -277,7 +284,6 @@
             reader.readAsArrayBuffer(e.target.files[0]);
         };
 
-        // Katman Değişimi
         document.getElementsByName('basemap').forEach(r => r.onchange = (e) => {
             if(e.target.id === 'osmBasemap') { map.addLayer(osmTileLayer); if(grayBordersLayer) map.removeLayer(grayBordersLayer); }
             else { 
