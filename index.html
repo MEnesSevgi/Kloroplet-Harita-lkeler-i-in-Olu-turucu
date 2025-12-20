@@ -3,43 +3,45 @@
 <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Dinamik Kloroplet Haritası - Final</title>
+    <title>Dinamik Kloroplet Haritası - Katman Kontrollü</title>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="" />
     <script src="https://cdnjs.cloudflare.com/ajax/libs/lz-string/1.4.4/lz-string.min.js"></script>
     <style>
         html, body { margin: 0; padding: 0; height: 100vh; width: 100vw; font-family: Arial, sans-serif; display: flex; overflow: hidden; background-color: #f4f4f4; }
-        #map { flex-grow: 1; height: 100vh; width: 100%; position: relative; background: #f4f4f4; }
+        #map { flex-grow: 1; height: 100vh; width: 100%; position: relative; background: #ffffff; } /* Arka planı beyaz yaptık */
         #sidebar { width: 350px; background: #ffffff; border-left: 1px solid #ddd; padding: 15px; overflow-y: auto; box-shadow: -2px 0 5px rgba(0,0,0,0.1); flex-shrink: 0; z-index: 1001; }
         
-        /* Paylaşılan linkte sidebar'ı gizleyen kritik kısım */
         .viewer-mode #sidebar { display: none !important; }
         .viewer-mode #map { width: 100vw; }
 
         h2 { font-size: 18px; margin-top: 0; padding-bottom: 5px; border-bottom: 2px solid #007bff; color: #007bff; }
         h3 { font-size: 16px; margin-top: 15px; margin-bottom: 5px; color: #333; }
-        .control-group, .layer-control-group { margin-bottom: 20px; padding: 10px; border: 1px solid #eee; border-radius: 6px; background-color: #f8f9fa; }
+        .control-group { margin-bottom: 20px; padding: 10px; border: 1px solid #eee; border-radius: 6px; background-color: #f8f9fa; }
         label { display: block; margin-top: 5px; font-weight: bold; font-size: 13px; }
         input[type=color], input[type=text], select, button, .file-input-label { width: 100%; padding: 8px; margin-top: 5px; border-radius: 4px; border: 1px solid #ccc; font-size: 13px; box-sizing: border-box; cursor: pointer; text-align: center; }
-        input[type=text] { text-align: left; cursor: text; }
         #applyColoring { background-color: #007bff; color: white; font-weight: bold; }
         #shareMap { background-color: #6f42c1; color: white; font-weight: bold; margin-top: 5px; }
-        .map-title { position: absolute; top: 20px; left: 50%; transform: translateX(-50%); z-index: 1000; background: rgba(255, 255, 255, 0.9); padding: 12px 25px; border-radius: 8px; border: 2px solid rgba(0,0,0,0.1); font-size: 22px; font-weight: bold; color: #333; box-shadow: 0 4px 15px rgba(0,0,0,0.2); white-space: nowrap; pointer-events: none; text-align: center; }
+        
+        .map-title { position: absolute; top: 20px; left: 50%; transform: translateX(-50%); z-index: 1000; background: rgba(255, 255, 255, 0.9); padding: 12px 25px; border-radius: 8px; border: 2px solid rgba(0,0,0,0.1); font-size: 22px; font-weight: bold; color: #333; box-shadow: 0 4px 15px rgba(0,0,0,0.2); pointer-events: none; text-align: center; }
+        
         .range-item { display: flex; align-items: center; gap: 5px; margin-bottom: 5px; }
         .range-item input { width: 100%; padding: 4px; font-size: 12px; }
         .range-color-box { width: 20px; height: 20px; border: 1px solid #999; flex-shrink: 0; }
+        
         #excelControls { display: flex; gap: 5px; margin-bottom: 10px; }
         #fileUpload { display: none; }
-        .file-input-label { background-color: #28a745; color: white; margin-top: 5px; line-height: 1.2; display: inline-block; }
+        .file-input-label { background-color: #28a745; color: white; margin-top: 5px; }
+        
         #dataInputContainer { max-height: 25vh; overflow-y: auto; margin-top: 10px; border: 1px solid #eee; padding: 5px; background: #fff; }
-        .country-data-item { display: flex; align-items: center; margin-bottom: 5px; border-bottom: 1px dotted #eee; }
-        .country-data-item input { padding: 4px; font-size: 12px; height: 26px; }
-        .legend { background: white; padding: 10px; border: 1px solid #ccc; border-radius: 5px; box-shadow: 0 0 15px rgba(0,0,0,0.2); font-size: 12px; line-height: 1.5; }
+        .country-data-item { display: flex; align-items: center; margin-bottom: 5px; }
+        
+        .legend { background: white; padding: 10px; border: 1px solid #ccc; border-radius: 5px; box-shadow: 0 0 15px rgba(0,0,0,0.1); font-size: 12px; }
         .legend i { width: 16px; height: 16px; float: left; margin-right: 8px; opacity: 0.8; }
-        .info-panel { background: white; padding: 12px; border: 1px solid #ccc; border-radius: 5px; box-shadow: 0 0 15px rgba(0,0,0,0.2); font-size: 13px; line-height: 1.6; min-width: 180px; }
-        .info-panel h4 { margin: 0 0 8px 0; color: #007bff; border-bottom: 1px solid #eee; padding-bottom: 4px; font-size: 14px; }
-        .info-panel ul { list-style: none; padding: 0; margin: 0; }
-        .info-panel li { display: flex; justify-content: space-between; border-bottom: 1px solid #f9f9f9; }
-        .info-panel li b { color: #333; margin-left: 10px; }
+        
+        .info-panel { background: white; padding: 12px; border: 1px solid #ccc; border-radius: 5px; font-size: 13px; min-width: 180px; }
+        
+        /* Katman kontrol panelini daha belirgin yapalım */
+        .leaflet-control-layers { border: 2px solid #007bff !important; }
     </style>
 </head>
 <body>
@@ -62,7 +64,7 @@
             <div id="rangeSettingsContainer"></div>
             
             <button id="applyColoring">✅ Haritayı Renklendir</button>
-            <button id="shareMap">🔗 Sıkıştırılmış Linki Kopyala</button>
+            <button id="shareMap">🔗 Linki Kopyala</button>
         </div>
 
         <h3>Veri Yönetimi</h3>
@@ -76,14 +78,6 @@
         <div id="dataInputContainer">
             <div style="text-align: center; font-style: italic;">Yükleniyor...</div>
         </div>
-
-        <div class="layer-control-group">
-            <label>Altlık Harita Görünümü:</label>
-            <input type="radio" id="osmBasemap" name="basemap" checked />
-            <label for="osmBasemap" style="display:inline; font-weight:normal;">Renkli (OSM)</label><br>
-            <input type="radio" id="grayBorders" name="basemap" />
-            <label for="grayBorders" style="display:inline; font-weight:normal;">Sadece Sınırlar (Gri)</label>
-        </div>
     </div>
 
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
@@ -92,9 +86,25 @@
 
     <script>
         const map = L.map('map').setView([20, 0], 2);
-        const polygonsGroup = L.layerGroup().addTo(map);
-        const osmTileLayer = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
         
+        // Katmanları Tanımlayalım
+        const osmLayer = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png');
+        const polygonsGroup = L.layerGroup().addTo(map);
+
+        // Katman Kontrolü (Sol Üst)
+        // İkisini de overlay (üst katman) olarak ekliyoruz ki bağımsız kapatılabilsinler
+        const overlays = {
+            "🌍 Altlık Harita (OSM)": osmLayer,
+            "📊 Veri Katmanı (Ülkeler)": polygonsGroup
+        };
+
+        // Kontrol panelini ekle (Her iki katman da başlangıçta açık olsun derseniz .addTo(map) kullanın)
+        L.control.layers(null, overlays, { position: 'topleft', collapsed: false }).addTo(map);
+        
+        // Başlangıçta ikisini de aktif edelim
+        osmLayer.addTo(map);
+        polygonsGroup.addTo(map);
+
         let countriesGeoJSON = null;
         let geojsonFeatureOrder = [];
         let countryData = {};
@@ -124,9 +134,7 @@
         }
 
         function getColor(v) {
-            if (v === undefined || isNaN(v) || v === null || v === 0) {
-                return document.getElementById('grayBorders').checked ? '#e0e0e0' : '#f1f1f1';
-            }
+            if (v === undefined || isNaN(v) || v === null || v === 0) return '#f1f1f1';
             const colors = generateColorScale(colorPicker.value, gradientType.value, manualBreaks.length + 1);
             for (let i = manualBreaks.length - 1; i >= 0; i--) {
                 if (v >= manualBreaks[i]) return colors[i + 1];
@@ -152,20 +160,6 @@
         };
         topFivePanel.addTo(map);
 
-        function renderDataInputs() {
-            dataInputContainer.innerHTML = '';
-            geojsonFeatureOrder.forEach(id => {
-                const d = countryData[id] || { dataValue: '', displayName: id };
-                const div = document.createElement('div');
-                div.className = 'country-data-item';
-                div.innerHTML = `
-                    <input type="text" value="${d.displayName}" oninput="updateData('${id}', 'n', this.value)" style="flex:2">
-                    <input type="number" value="${d.dataValue}" oninput="updateData('${id}', 'v', this.value)" style="flex:1">
-                `;
-                dataInputContainer.appendChild(div);
-            });
-        }
-
         function applyChoroplethColoring() {
             const inputs = document.querySelectorAll('.break-input');
             if(inputs.length > 0) {
@@ -174,17 +168,14 @@
             updateMapTitle();
             polygonsGroup.clearLayers();
 
-            const isGrayMode = document.getElementById('grayBorders').checked;
-            
             L.geoJSON(countriesGeoJSON, {
                 style: (f) => {
                     const val = countryData[getCountryName(f)]?.dataValue;
-                    const fillColor = getColor(val);
                     return { 
-                        fillColor: fillColor, 
-                        color: isGrayMode ? '#999' : 'white', 
-                        weight: isGrayMode ? 0.5 : 1, 
-                        fillOpacity: (val > 0 || isGrayMode) ? 0.8 : 0.2 
+                        fillColor: getColor(val), 
+                        color: 'white', 
+                        weight: 1, 
+                        fillOpacity: val > 0 ? 0.8 : 0.2 
                     };
                 },
                 onEachFeature: (f, layer) => {
@@ -245,7 +236,6 @@
                 const params = new URLSearchParams(window.location.search);
                 const configData = params.get('config');
                 if (configData) {
-                    // LINKTEN GELİNDİYSE SİDEBAR'I GİZLE
                     document.body.classList.add('viewer-mode');
                     try {
                         const decoded = JSON.parse(LZString.decompressFromEncodedURIComponent(configData));
@@ -262,18 +252,19 @@
                 applyChoroplethColoring();
             });
 
-        document.getElementById('osmBasemap').onchange = function() {
-            if(this.checked) {
-                osmTileLayer.addTo(map);
-                applyChoroplethColoring();
-            }
-        };
-        document.getElementById('grayBorders').onchange = function() {
-            if(this.checked) {
-                map.removeLayer(osmTileLayer);
-                applyChoroplethColoring();
-            }
-        };
+        function renderDataInputs() {
+            dataInputContainer.innerHTML = '';
+            geojsonFeatureOrder.forEach(id => {
+                const d = countryData[id] || { dataValue: '', displayName: id };
+                const div = document.createElement('div');
+                div.className = 'country-data-item';
+                div.innerHTML = `
+                    <input type="text" value="${d.displayName}" oninput="updateData('${id}', 'n', this.value)" style="flex:2; font-size:11px;">
+                    <input type="number" value="${d.dataValue}" oninput="updateData('${id}', 'v', this.value)" style="flex:1; font-size:11px;">
+                `;
+                dataInputContainer.appendChild(div);
+            });
+        }
 
         document.getElementById('downloadExcel').onclick = () => {
             const data = geojsonFeatureOrder.map(id => ({'ÜLKE_ADI_HARİTA': id, 'MATEMATİKSEL_DEĞER': countryData[id]?.dataValue || 0}));
@@ -304,7 +295,7 @@
             const config = { mt: mapTitleInput.value, c: colorPicker.value, t: gradientType.value, b: manualBreaks, d: countryData };
             const compressed = LZString.compressToEncodedURIComponent(JSON.stringify(config));
             const url = window.location.origin + window.location.pathname + '?config=' + compressed;
-            navigator.clipboard.writeText(url).then(() => alert("Paylaşım linki kopyalandı! Bu linkle girenler yan paneli görmez."));
+            navigator.clipboard.writeText(url).then(() => alert("Paylaşım linki kopyalandı!"));
         };
     </script>
 </body>
