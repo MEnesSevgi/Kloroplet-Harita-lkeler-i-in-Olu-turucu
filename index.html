@@ -3,15 +3,18 @@
 <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Dinamik Kloroplet Haritası - Fix v2</title>
+    <title>Dinamik Kloroplet Haritası - Final</title>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="" />
     <script src="https://cdnjs.cloudflare.com/ajax/libs/lz-string/1.4.4/lz-string.min.js"></script>
     <style>
         html, body { margin: 0; padding: 0; height: 100vh; width: 100vw; font-family: Arial, sans-serif; display: flex; overflow: hidden; background-color: #f4f4f4; }
         #map { flex-grow: 1; height: 100vh; width: 100%; position: relative; background: #f4f4f4; }
         #sidebar { width: 350px; background: #ffffff; border-left: 1px solid #ddd; padding: 15px; overflow-y: auto; box-shadow: -2px 0 5px rgba(0,0,0,0.1); flex-shrink: 0; z-index: 1001; }
+        
+        /* Paylaşılan linkte sidebar'ı gizleyen kritik kısım */
         .viewer-mode #sidebar { display: none !important; }
         .viewer-mode #map { width: 100vw; }
+
         h2 { font-size: 18px; margin-top: 0; padding-bottom: 5px; border-bottom: 2px solid #007bff; color: #007bff; }
         h3 { font-size: 16px; margin-top: 15px; margin-bottom: 5px; color: #333; }
         .control-group, .layer-control-group { margin-bottom: 20px; padding: 10px; border: 1px solid #eee; border-radius: 6px; background-color: #f8f9fa; }
@@ -121,7 +124,6 @@
         }
 
         function getColor(v) {
-            // Veri yoksa veya 0 ise şeffaf/gri dön
             if (v === undefined || isNaN(v) || v === null || v === 0) {
                 return document.getElementById('grayBorders').checked ? '#e0e0e0' : '#f1f1f1';
             }
@@ -234,7 +236,7 @@
             else countryData[id].displayName = val;
         };
 
-        fetch('https://raw.githubusercontent.com/MEnesSevgi/altlik-harita/main/map (5).geojson')
+        fetch('https://raw.githubusercontent.com/MEnesSevgi/altlik-harita/main/countries.geojson.txt')
             .then(res => res.json())
             .then(data => {
                 countriesGeoJSON = data;
@@ -243,6 +245,8 @@
                 const params = new URLSearchParams(window.location.search);
                 const configData = params.get('config');
                 if (configData) {
+                    // LINKTEN GELİNDİYSE SİDEBAR'I GİZLE
+                    document.body.classList.add('viewer-mode');
                     try {
                         const decoded = JSON.parse(LZString.decompressFromEncodedURIComponent(configData));
                         mapTitleInput.value = decoded.mt || "";
@@ -258,7 +262,6 @@
                 applyChoroplethColoring();
             });
 
-        // Altlık değiştirme olayı
         document.getElementById('osmBasemap').onchange = function() {
             if(this.checked) {
                 osmTileLayer.addTo(map);
@@ -288,10 +291,7 @@
                 const json = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]]);
                 json.forEach(row => {
                     const id = row['ÜLKE_ADI_HARİTA'];
-                    if(id) countryData[id] = { 
-                        dataValue: parseFloat(row['MATEMATİKSEL_DEĞER']) || 0, 
-                        displayName: id 
-                    };
+                    if(id) countryData[id] = { dataValue: parseFloat(row['MATEMATİKSEL_DEĞER']) || 0, displayName: id };
                 });
                 renderDataInputs();
                 applyChoroplethColoring();
@@ -304,7 +304,7 @@
             const config = { mt: mapTitleInput.value, c: colorPicker.value, t: gradientType.value, b: manualBreaks, d: countryData };
             const compressed = LZString.compressToEncodedURIComponent(JSON.stringify(config));
             const url = window.location.origin + window.location.pathname + '?config=' + compressed;
-            navigator.clipboard.writeText(url).then(() => alert("Paylaşım linki kopyalandı!"));
+            navigator.clipboard.writeText(url).then(() => alert("Paylaşım linki kopyalandı! Bu linkle girenler yan paneli görmez."));
         };
     </script>
 </body>
